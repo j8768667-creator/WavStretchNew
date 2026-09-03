@@ -145,6 +145,81 @@
   .hint { font-size: 0.68rem; color: var(--text-muted); line-height: 1.4; }
   .collapsible-body { display: flex; flex-direction: column; gap: 10px; }
   .hidden { display: none !important; }
+
+  /* Cinematic FX Chain Styling */
+  .fx-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .fx-card.fx-active {
+    border-color: rgba(99, 102, 241, 0.45);
+    box-shadow: 0 0 16px rgba(99, 102, 241, 0.12);
+  }
+  .fx-card.fx-disabled {
+    opacity: 0.58;
+  }
+  .fx-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .fx-sub-panel {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .fx-sub-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+  .fx-sub-title .badge {
+    font-size: 0.62rem;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: var(--card-hover);
+    color: var(--accent-pink);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .fx-sub-title .badge.off {
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.3);
+  }
+  .fx-bake-btn {
+    background: linear-gradient(135deg, #6366f1, #ec4899);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+    transition: opacity 0.15s;
+    touch-action: manipulation;
+  }
+  .fx-bake-btn:hover {
+    opacity: 0.9;
+  }
+  .fx-bake-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
 </style>
 </head>
 <body>
@@ -285,6 +360,125 @@
     <div class="control-group">
       <div class="control-header"><span>Output Volume</span><span class="val" id="volVal">80%</span></div>
       <input type="range" id="volume" min="0" max="1" step="0.05" value="0.8">
+    </div>
+
+    <!-- Cinematic FX Chain (Shimmer Reverb, Tape Flutter & Wow) -->
+    <div class="section-label" style="margin-top: 4px;">
+      <span>Cinematic FX Chain</span>
+      <span class="badge" id="fxActiveBadge" style="background: linear-gradient(135deg, rgba(99,102,241,0.25), rgba(236,72,153,0.25)); color: #f472b6; border: 1px solid rgba(236,72,153,0.3);">Shimmer &amp; Tape</span>
+    </div>
+
+    <div class="fx-card fx-active" id="cinematicFxCard">
+      <!-- Master FX Header -->
+      <div class="fx-header-row">
+        <div class="checkbox-row" style="margin: 0; font-weight: 700; color: var(--text-main);">
+          <input type="checkbox" id="fxMasterEnabled" checked>
+          <label for="fxMasterEnabled">Enable Cinematic FX</label>
+        </div>
+        <div style="flex: 1; min-width: 150px; max-width: 220px;">
+          <select id="fxPresetSelect" class="preset-select" style="padding: 5px 8px; font-size: 0.75rem;">
+            <option value="celestial" selected>Celestial Shimmer</option>
+            <option value="vintage1982">1982 Vintage Cassette</option>
+            <option value="starlight">Starlight Cathedral</option>
+            <option value="abyssal">Abyssal Dark Drone</option>
+            <option value="vhs">Nostalgia VHS Tape</option>
+            <option value="custom">Custom / Manual</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Shimmer Reverb Engine -->
+      <div class="fx-sub-panel" id="shimmerPanel">
+        <div class="fx-sub-title">
+          <div class="checkbox-row" style="margin: 0;">
+            <input type="checkbox" id="shimmerEnabled" checked>
+            <label for="shimmerEnabled" style="font-weight: 600; color: #e0e7ff;">✨ Shimmer Reverb Engine</label>
+          </div>
+          <span class="badge" id="shimmerBadge">Active</span>
+        </div>
+        <div class="two-col">
+          <div>
+            <div class="control-header"><span>Reverb Mix</span><span class="val" id="reverbMixVal">55%</span></div>
+            <input type="range" id="reverbMix" min="0" max="1" step="0.02" value="0.55">
+          </div>
+          <div>
+            <div class="control-header"><span>Decay Time</span><span class="val" id="reverbDecayVal">8.5s</span></div>
+            <input type="range" id="reverbDecay" min="1" max="16" step="0.5" value="8.5">
+          </div>
+        </div>
+        <div class="two-col">
+          <div>
+            <div class="control-header"><span>Shimmer Halo</span><span class="val" id="shimmerAmountVal">65%</span></div>
+            <input type="range" id="shimmerAmount" min="0" max="1" step="0.02" value="0.65">
+          </div>
+          <div>
+            <div class="control-header"><span>Shimmer Tone</span><span class="val" id="shimmerToneVal">Airy</span></div>
+            <input type="range" id="shimmerTone" min="1500" max="14000" step="250" value="8500">
+          </div>
+        </div>
+        <div>
+          <label class="hint" style="margin-bottom: 3px; display: block;">Shimmer Pitch Harmonics</label>
+          <select id="shimmerInterval" style="padding: 5px 8px; font-size: 0.75rem;">
+            <option value="+12" selected>+12 st — Octave Up (Ethereal Halo)</option>
+            <option value="+24">+24 st — 2 Octaves (Crystal Sparkle)</option>
+            <option value="+7">+7 st — Perfect Fifth (Harmonic Bloom)</option>
+            <option value="dual">+12 &amp; +19 st — Octave + Fifth (Celestial Chord)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Tape Flutter & Wow Engine -->
+      <div class="fx-sub-panel" id="tapePanel">
+        <div class="fx-sub-title">
+          <div class="checkbox-row" style="margin: 0;">
+            <input type="checkbox" id="tapeEnabled" checked>
+            <label for="tapeEnabled" style="font-weight: 600; color: #fce7f3;">📼 Tape Flutter &amp; Wow</label>
+          </div>
+          <span class="badge" id="tapeBadge">Active</span>
+        </div>
+        <div class="two-col">
+          <div>
+            <div class="control-header"><span>Tape Wow (Drift)</span><span class="val" id="tapeWowVal">25%</span></div>
+            <input type="range" id="tapeWow" min="0" max="1" step="0.02" value="0.25">
+          </div>
+          <div>
+            <div class="control-header"><span>Tape Flutter</span><span class="val" id="tapeFlutterVal">20%</span></div>
+            <input type="range" id="tapeFlutter" min="0" max="1" step="0.02" value="0.20">
+          </div>
+        </div>
+        <div class="two-col">
+          <div>
+            <div class="control-header"><span>Tape Drive / Warmth</span><span class="val" id="tapeDriveVal">25%</span></div>
+            <input type="range" id="tapeDrive" min="0" max="1" step="0.02" value="0.25">
+          </div>
+          <div>
+            <div class="control-header"><span>Tape Age / Tone</span><span class="val" id="tapeAgeVal">Clean</span></div>
+            <input type="range" id="tapeAge" min="0" max="1" step="0.02" value="0.15">
+          </div>
+        </div>
+        <div class="two-col advanced-only hidden">
+          <div>
+            <div class="control-header"><span>Wow Rate</span><span class="val" id="tapeWowRateVal">0.50 Hz</span></div>
+            <input type="range" id="tapeWowRate" min="0.2" max="1.5" step="0.05" value="0.50">
+          </div>
+          <div>
+            <div class="control-header"><span>Flutter Rate</span><span class="val" id="tapeFlutterRateVal">5.2 Hz</span></div>
+            <input type="range" id="tapeFlutterRate" min="3.0" max="8.0" step="0.2" value="5.2">
+          </div>
+        </div>
+      </div>
+
+      <!-- Bake FX & Render Options -->
+      <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 2px;">
+        <button type="button" class="fx-bake-btn" id="bakeFxBtn" disabled>Bake FX into Soundscape</button>
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+          <div class="checkbox-row" style="font-size: 0.75rem;">
+            <input type="checkbox" id="autoBakeFxOnRender" checked>
+            <label for="autoBakeFxOnRender">Auto-apply FX on Render</label>
+          </div>
+          <span class="hint" id="fxBakeStatus" style="font-size: 0.68rem; color: var(--accent-pink);"></span>
+        </div>
+      </div>
     </div>
 
     <div class="section-label advanced-only hidden">Stretch Engine</div>
@@ -562,6 +756,35 @@ const highpassInput = $('highpass');
 const reverbInput = $('reverb');
 const volumeInput = $('volume');
 
+// Cinematic FX Chain DOM Elements
+const fxMasterEnabled = $('fxMasterEnabled');
+const fxPresetSelect = $('fxPresetSelect');
+const fxActiveBadge = $('fxActiveBadge');
+const cinematicFxCard = $('cinematicFxCard');
+
+const shimmerEnabled = $('shimmerEnabled');
+const shimmerBadge = $('shimmerBadge');
+const shimmerPanel = $('shimmerPanel');
+const reverbMixInput = $('reverbMix');
+const reverbDecayInput = $('reverbDecay');
+const shimmerAmountInput = $('shimmerAmount');
+const shimmerToneInput = $('shimmerTone');
+const shimmerIntervalInput = $('shimmerInterval');
+
+const tapeEnabled = $('tapeEnabled');
+const tapeBadge = $('tapeBadge');
+const tapePanel = $('tapePanel');
+const tapeWowInput = $('tapeWow');
+const tapeWowRateInput = $('tapeWowRate');
+const tapeFlutterInput = $('tapeFlutter');
+const tapeFlutterRateInput = $('tapeFlutterRate');
+const tapeDriveInput = $('tapeDrive');
+const tapeAgeInput = $('tapeAge');
+
+const bakeFxBtn = $('bakeFxBtn');
+const autoBakeFxOnRender = $('autoBakeFxOnRender');
+const fxBakeStatus = $('fxBakeStatus');
+
 const bpmInput = $('bpmInput');
 const beatsPerBarInput = $('beatsPerBar');
 const targetBarsInput = $('targetBars');
@@ -701,8 +924,236 @@ stretchInput.oninput = e => { $('stretchVal').textContent = `${parseFloat(e.targ
 phaseInput.oninput = e => $('phaseVal').textContent = `${Math.round(e.target.value * 100)}%`;
 lowpassInput.oninput = e => { $('lpVal').textContent = `${e.target.value} Hz`; updateLiveFilters(); };
 highpassInput.oninput = e => { $('hpVal').textContent = `${e.target.value} Hz`; updateLiveFilters(); };
-reverbInput.oninput = e => { $('reverbVal').textContent = `${Math.round(e.target.value * 100)}%`; updateLiveFilters(); };
+reverbInput.oninput = e => {
+  $('reverbVal').textContent = `${Math.round(e.target.value * 100)}%`;
+  if (reverbMixInput) {
+    reverbMixInput.value = e.target.value;
+    $('reverbMixVal').textContent = `${Math.round(e.target.value * 100)}%`;
+    if (fxPresetSelect) fxPresetSelect.value = 'custom';
+  }
+  updateLiveFilters();
+};
 volumeInput.oninput = e => { $('volVal').textContent = `${Math.round(e.target.value * 100)}%`; updateLiveFilters(); };
+
+// ---------------------------------------------------------------------------
+// Cinematic FX Chain Presets & UI Listeners
+// ---------------------------------------------------------------------------
+const CINEMATIC_FX_PRESETS = {
+  celestial: {
+    name: 'Celestial Shimmer',
+    masterEnabled: true,
+    shimmerEnabled: true,
+    reverbMix: 0.55,
+    reverbDecay: 8.5,
+    shimmerAmount: 0.65,
+    shimmerInterval: '+12',
+    shimmerTone: 8500,
+    tapeEnabled: true,
+    tapeWow: 0.25,
+    tapeWowRate: 0.50,
+    tapeFlutter: 0.20,
+    tapeFlutterRate: 5.2,
+    tapeDrive: 0.25,
+    tapeAge: 0.15
+  },
+  vintage1982: {
+    name: '1982 Vintage Cassette',
+    masterEnabled: true,
+    shimmerEnabled: true,
+    reverbMix: 0.35,
+    reverbDecay: 4.5,
+    shimmerAmount: 0.25,
+    shimmerInterval: '+12',
+    shimmerTone: 4500,
+    tapeEnabled: true,
+    tapeWow: 0.60,
+    tapeWowRate: 0.75,
+    tapeFlutter: 0.55,
+    tapeFlutterRate: 6.2,
+    tapeDrive: 0.55,
+    tapeAge: 0.65
+  },
+  starlight: {
+    name: 'Starlight Cathedral',
+    masterEnabled: true,
+    shimmerEnabled: true,
+    reverbMix: 0.65,
+    reverbDecay: 12.0,
+    shimmerAmount: 0.80,
+    shimmerInterval: '+24',
+    shimmerTone: 11000,
+    tapeEnabled: true,
+    tapeWow: 0.15,
+    tapeWowRate: 0.40,
+    tapeFlutter: 0.10,
+    tapeFlutterRate: 4.5,
+    tapeDrive: 0.15,
+    tapeAge: 0.10
+  },
+  abyssal: {
+    name: 'Abyssal Dark Drone',
+    masterEnabled: true,
+    shimmerEnabled: true,
+    reverbMix: 0.50,
+    reverbDecay: 10.0,
+    shimmerAmount: 0.40,
+    shimmerInterval: '+7',
+    shimmerTone: 3200,
+    tapeEnabled: true,
+    tapeWow: 0.45,
+    tapeWowRate: 0.35,
+    tapeFlutter: 0.18,
+    tapeFlutterRate: 3.8,
+    tapeDrive: 0.45,
+    tapeAge: 0.45
+  },
+  vhs: {
+    name: 'Nostalgia VHS Tape',
+    masterEnabled: true,
+    shimmerEnabled: true,
+    reverbMix: 0.30,
+    reverbDecay: 3.5,
+    shimmerAmount: 0.15,
+    shimmerInterval: '+12',
+    shimmerTone: 5000,
+    tapeEnabled: true,
+    tapeWow: 0.75,
+    tapeWowRate: 0.90,
+    tapeFlutter: 0.70,
+    tapeFlutterRate: 7.0,
+    tapeDrive: 0.65,
+    tapeAge: 0.70
+  }
+};
+
+function getCinematicFXParams() {
+  return {
+    masterEnabled: fxMasterEnabled ? fxMasterEnabled.checked : true,
+    shimmerEnabled: shimmerEnabled ? shimmerEnabled.checked : true,
+    reverbMix: parseFloat(reverbMixInput.value) || 0,
+    reverbDecay: parseFloat(reverbDecayInput.value) || 7.0,
+    shimmerAmount: parseFloat(shimmerAmountInput.value) || 0,
+    shimmerInterval: shimmerIntervalInput.value || '+12',
+    shimmerTone: parseFloat(shimmerToneInput.value) || 8500,
+    tapeEnabled: tapeEnabled ? tapeEnabled.checked : true,
+    tapeWow: parseFloat(tapeWowInput.value) || 0,
+    tapeWowRate: parseFloat(tapeWowRateInput.value) || 0.65,
+    tapeFlutter: parseFloat(tapeFlutterInput.value) || 0,
+    tapeFlutterRate: parseFloat(tapeFlutterRateInput.value) || 5.5,
+    tapeDrive: parseFloat(tapeDriveInput.value) || 0,
+    tapeAge: parseFloat(tapeAgeInput.value) || 0
+  };
+}
+
+function isCinematicFXEnabled() {
+  return !!(fxMasterEnabled && fxMasterEnabled.checked && (shimmerEnabled.checked || tapeEnabled.checked));
+}
+
+function updateLiveCinematicFX() {
+  const p = getCinematicFXParams();
+  
+  // Update card styling
+  if (cinematicFxCard) {
+    cinematicFxCard.classList.toggle('fx-active', p.masterEnabled);
+    cinematicFxCard.classList.toggle('fx-disabled', !p.masterEnabled);
+  }
+  
+  // Update badges
+  if (fxActiveBadge) {
+    if (!p.masterEnabled) {
+      fxActiveBadge.textContent = 'Bypassed';
+      fxActiveBadge.style.background = 'var(--border)';
+      fxActiveBadge.style.color = 'var(--text-muted)';
+      fxActiveBadge.style.borderColor = 'transparent';
+    } else {
+      const activeParts = [];
+      if (p.shimmerEnabled) activeParts.push('Shimmer');
+      if (p.tapeEnabled) activeParts.push('Tape');
+      fxActiveBadge.textContent = activeParts.length ? activeParts.join(' & ') : 'Off';
+      fxActiveBadge.style.background = 'linear-gradient(135deg, rgba(99,102,241,0.25), rgba(236,72,153,0.25))';
+      fxActiveBadge.style.color = '#f472b6';
+      fxActiveBadge.style.borderColor = 'rgba(236,72,153,0.3)';
+    }
+  }
+  
+  if (shimmerBadge) {
+    shimmerBadge.textContent = (p.masterEnabled && p.shimmerEnabled) ? 'Active' : 'Muted';
+    shimmerBadge.classList.toggle('off', !(p.masterEnabled && p.shimmerEnabled));
+  }
+  if (tapeBadge) {
+    tapeBadge.textContent = (p.masterEnabled && p.tapeEnabled) ? 'Active' : 'Muted';
+    tapeBadge.classList.toggle('off', !(p.masterEnabled && p.tapeEnabled));
+  }
+  
+  // Update labels
+  if ($('reverbMixVal')) $('reverbMixVal').textContent = `${Math.round(p.reverbMix * 100)}%`;
+  if ($('reverbDecayVal')) $('reverbDecayVal').textContent = `${p.reverbDecay.toFixed(1)}s`;
+  if ($('shimmerAmountVal')) $('shimmerAmountVal').textContent = `${Math.round(p.shimmerAmount * 100)}%`;
+  if ($('shimmerToneVal')) $('shimmerToneVal').textContent = p.shimmerTone > 9000 ? 'Airy' : (p.shimmerTone > 5000 ? 'Warm' : 'Dark');
+  if ($('tapeWowVal')) $('tapeWowVal').textContent = `${Math.round(p.tapeWow * 100)}%`;
+  if ($('tapeFlutterVal')) $('tapeFlutterVal').textContent = `${Math.round(p.tapeFlutter * 100)}%`;
+  if ($('tapeDriveVal')) $('tapeDriveVal').textContent = `${Math.round(p.tapeDrive * 100)}%`;
+  if ($('tapeAgeVal')) $('tapeAgeVal').textContent = p.tapeAge > 0.6 ? 'Worn Cassette' : (p.tapeAge > 0.3 ? 'Aged Tape' : 'Clean');
+  if ($('tapeWowRateVal')) $('tapeWowRateVal').textContent = `${p.tapeWowRate.toFixed(2)} Hz`;
+  if ($('tapeFlutterRateVal')) $('tapeFlutterRateVal').textContent = `${p.tapeFlutterRate.toFixed(1)} Hz`;
+  
+  // Sync quick reverb slider
+  if (reverbInput) {
+    reverbInput.value = p.reverbMix;
+    $('reverbVal').textContent = `${Math.round(p.reverbMix * 100)}%`;
+  }
+
+  if (liveNodes && liveNodes.fxChain) {
+    liveNodes.fxChain.update(p);
+  }
+}
+
+function applyCinematicFxPreset(key) {
+  const p = CINEMATIC_FX_PRESETS[key];
+  if (!p) return;
+  fxMasterEnabled.checked = p.masterEnabled;
+  shimmerEnabled.checked = p.shimmerEnabled;
+  reverbMixInput.value = p.reverbMix;
+  reverbDecayInput.value = p.reverbDecay;
+  shimmerAmountInput.value = p.shimmerAmount;
+  shimmerIntervalInput.value = p.shimmerInterval;
+  shimmerToneInput.value = p.shimmerTone;
+  
+  tapeEnabled.checked = p.tapeEnabled;
+  tapeWowInput.value = p.tapeWow;
+  tapeWowRateInput.value = p.tapeWowRate;
+  tapeFlutterInput.value = p.tapeFlutter;
+  tapeFlutterRateInput.value = p.tapeFlutterRate;
+  tapeDriveInput.value = p.tapeDrive;
+  tapeAgeInput.value = p.tapeAge;
+  
+  updateLiveCinematicFX();
+}
+
+fxPresetSelect.onchange = e => {
+  if (e.target.value === 'custom') return;
+  applyCinematicFxPreset(e.target.value);
+};
+
+fxMasterEnabled.onchange = () => updateLiveCinematicFX();
+shimmerEnabled.onchange = () => updateLiveCinematicFX();
+tapeEnabled.onchange = () => updateLiveCinematicFX();
+
+reverbMixInput.oninput = e => {
+  if (fxPresetSelect) fxPresetSelect.value = 'custom';
+  updateLiveCinematicFX();
+};
+reverbDecayInput.oninput = () => { if (fxPresetSelect) fxPresetSelect.value = 'custom'; updateLiveCinematicFX(); };
+shimmerAmountInput.oninput = () => { if (fxPresetSelect) fxPresetSelect.value = 'custom'; updateLiveCinematicFX(); };
+shimmerToneInput.oninput = () => { if (fxPresetSelect) fxPresetSelect.value = 'custom'; updateLiveCinematicFX(); };
+shimmerIntervalInput.onchange = () => { if (fxPresetSelect) fxPresetSelect.value = 'custom'; updateLiveCinematicFX(); };
+
+tapeWowInput.oninput = () => { if (fxPresetSelect) fxPresetSelect.value = 'custom'; updateLiveCinematicFX(); };
+tapeWowRateInput.oninput = () => { if (fxPresetSelect) fxPresetSelect.value = 'custom'; updateLiveCinematicFX(); };
+tapeFlutterInput.oninput = () => { if (fxPresetSelect) fxPresetSelect.value = 'custom'; updateLiveCinematicFX(); };
+tapeFlutterRateInput.oninput = () => { if (fxPresetSelect) fxPresetSelect.value = 'custom'; updateLiveCinematicFX(); };
+tapeDriveInput.oninput = () => { if (fxPresetSelect) fxPresetSelect.value = 'custom'; updateLiveCinematicFX(); };
+tapeAgeInput.oninput = () => { if (fxPresetSelect) fxPresetSelect.value = 'custom'; updateLiveCinematicFX(); };
 eqLowInput.oninput = e => $('eqLowVal').textContent = `${e.target.value} dB`;
 eqMidInput.oninput = e => $('eqMidVal').textContent = `${e.target.value} dB`;
 eqHighInput.oninput = e => $('eqHighVal').textContent = `${e.target.value} dB`;
@@ -2217,7 +2668,7 @@ processBtn.onclick = async () => {
     stemTransientChannels = null;
   }
 
-  finishRender(outChannels, sr);
+  await finishRender(outChannels, sr);
 };
 
 function normalizeFloatArray(arr, target) {
@@ -2367,7 +2818,7 @@ freezeBtn.onclick = async () => {
     outChannels.push(result);
   }
   if (!stereoWiden && numChannels > 1) for (let c = 1; c < numChannels; c++) outChannels.push(outChannels[0]);
-  finishRender(outChannels, sr);
+  await finishRender(outChannels, sr);
 };
 
 previewBtn.onclick = async () => {
@@ -2409,15 +2860,466 @@ function reportProgress(stepIndex, total, p, label) {
   progressLabel.textContent = `Processing ${stepIndex + 1}/${total} (${label}) — ${pct}%`;
 }
 
-function finishRender(outChannels, sr) {
+// ---------------------------------------------------------------------------
+// Cinematic FX Chain (Shimmer Reverb, Tape Flutter & Wow) DSP Engine
+// ---------------------------------------------------------------------------
+function createTapeWaveShaperCurve(drive, samples = 1024) {
+  const curve = new Float32Array(samples);
+  const clampedDrive = Math.max(0, Math.min(1, drive));
+  const k = 1 + clampedDrive * 3.5;
+  const norm = Math.tanh(k);
+  for (let i = 0; i < samples; i++) {
+    const x = (i * 2) / samples - 1;
+    curve[i] = Math.tanh(k * x) / norm;
+  }
+  return curve;
+}
+
+function getPitchRatioForInterval(interval) {
+  switch (interval) {
+    case '+24': return 4.0;
+    case '+7': return 1.498307;
+    case 'dual': return 2.996614;
+    case '+12':
+    default: return 2.0;
+  }
+}
+
+function createPitchShiftModBuffers(ctx, pitchRatio, grainSec = 0.045) {
+  const sr = ctx.sampleRate;
+  const numSamples = Math.max(64, Math.floor(grainSec * sr));
+  const bufA = ctx.createBuffer(2, numSamples, sr);
+  const bufB = ctx.createBuffer(2, numSamples, sr);
+  
+  const delA = bufA.getChannelData(0);
+  const gainA = bufA.getChannelData(1);
+  const delB = bufB.getChannelData(0);
+  const gainB = bufB.getChannelData(1);
+  
+  const baseDelay = 0.024;
+  const slope = -(pitchRatio - 1);
+  
+  for (let i = 0; i < numSamples; i++) {
+    const phaseA = i / numSamples;
+    const phaseB = (phaseA + 0.5) % 1.0;
+    
+    delA[i] = Math.max(0.002, Math.min(0.048, baseDelay + slope * (phaseA - 0.5) * grainSec));
+    delB[i] = Math.max(0.002, Math.min(0.048, baseDelay + slope * (phaseB - 0.5) * grainSec));
+    
+    gainA[i] = 0.5 * (1 - Math.cos(2 * Math.PI * phaseA));
+    gainB[i] = 0.5 * (1 - Math.cos(2 * Math.PI * phaseB));
+  }
+  return { bufA, bufB };
+}
+
+function createCinematicFXChain(ctx, isOffline = false, initialParams = {}) {
+  const p = Object.assign({
+    masterEnabled: true,
+    shimmerEnabled: true,
+    reverbMix: 0.55,
+    reverbDecay: 8.5,
+    shimmerAmount: 0.65,
+    shimmerInterval: '+12',
+    shimmerTone: 8500,
+    tapeEnabled: true,
+    tapeWow: 0.25,
+    tapeWowRate: 0.50,
+    tapeFlutter: 0.20,
+    tapeFlutterRate: 5.2,
+    tapeDrive: 0.25,
+    tapeAge: 0.15
+  }, initialParams);
+
+  const inputNode = ctx.createGain();
+  const outputNode = ctx.createGain();
+
+  // Master bypass crossfade
+  const dryMaster = ctx.createGain();
+  const wetMaster = ctx.createGain();
+  inputNode.connect(dryMaster);
+  dryMaster.connect(outputNode);
+  inputNode.connect(wetMaster);
+
+  // -------------------------------------------------------------------------
+  // Stage 1: Tape Flutter & Wow
+  // -------------------------------------------------------------------------
+  const tapeIn = ctx.createGain();
+  const tapeOut = ctx.createGain();
+  const tapeDry = ctx.createGain();
+  const tapeWet = ctx.createGain();
+
+  wetMaster.connect(tapeIn);
+  tapeIn.connect(tapeDry);
+  tapeDry.connect(tapeOut);
+  tapeIn.connect(tapeWet);
+
+  // Delay node with wow and flutter modulation
+  const tapeDelay = ctx.createDelay(0.15);
+  tapeDelay.delayTime.value = 0.024; // 24ms base delay
+
+  const wowOsc = ctx.createOscillator();
+  wowOsc.type = 'sine';
+  wowOsc.frequency.value = p.tapeWowRate;
+  const wowGain = ctx.createGain();
+  wowGain.gain.value = p.tapeWow * 0.0035;
+  wowOsc.connect(wowGain);
+  wowGain.connect(tapeDelay.delayTime);
+
+  const flutterOsc = ctx.createOscillator();
+  flutterOsc.type = 'triangle';
+  flutterOsc.frequency.value = p.tapeFlutterRate;
+  const flutterGain = ctx.createGain();
+  flutterGain.gain.value = p.tapeFlutter * 0.0012;
+  flutterOsc.connect(flutterGain);
+  flutterGain.connect(tapeDelay.delayTime);
+
+  // Tape Head bump (~85Hz warmth boost)
+  const headBump = ctx.createBiquadFilter();
+  headBump.type = 'peaking';
+  headBump.frequency.value = 85;
+  headBump.Q.value = 1.1;
+  headBump.gain.value = p.tapeDrive * 3.0;
+
+  // Tape treble roll-off / age
+  const tapeHighCut = ctx.createBiquadFilter();
+  tapeHighCut.type = 'lowpass';
+  tapeHighCut.frequency.value = Math.max(3500, 18500 - p.tapeAge * 11500);
+
+  // Tape saturation curve
+  const tapeShaper = ctx.createWaveShaper();
+  tapeShaper.oversample = '4x';
+  tapeShaper.curve = createTapeWaveShaperCurve(p.tapeDrive);
+
+  tapeWet.connect(tapeDelay);
+  tapeDelay.connect(headBump);
+  headBump.connect(tapeHighCut);
+  tapeHighCut.connect(tapeShaper);
+  tapeShaper.connect(tapeOut);
+
+  // -------------------------------------------------------------------------
+  // Stage 2: Shimmer Reverb Engine
+  // -------------------------------------------------------------------------
+  const reverbIn = ctx.createGain();
+  const reverbOut = ctx.createGain();
+  tapeOut.connect(reverbIn);
+
+  const revDry = ctx.createGain();
+  const revWet = ctx.createGain();
+  reverbIn.connect(revDry);
+  revDry.connect(reverbOut);
+
+  // 6 comb filter delay lines for spatial diffusion
+  const combDelaysSec = [0.0297, 0.0371, 0.0411, 0.0493, 0.0587, 0.0673];
+  const combDelays = [];
+  const combFilters = [];
+  const combGains = [];
+  const combInSum = ctx.createGain();
+  reverbIn.connect(combInSum);
+
+  for (let i = 0; i < combDelaysSec.length; i++) {
+    const cd = ctx.createDelay(0.2);
+    cd.delayTime.value = combDelaysSec[i];
+
+    const cf = ctx.createBiquadFilter();
+    cf.type = 'lowpass';
+    cf.frequency.value = Math.max(1200, Math.min(14000, p.shimmerTone * 0.9));
+
+    const cg = ctx.createGain();
+    const g = Math.min(0.94, Math.pow(10, (-3 * combDelaysSec[i]) / Math.max(0.8, p.reverbDecay)));
+    cg.gain.value = g;
+
+    combInSum.connect(cd);
+    cd.connect(cf);
+    cf.connect(cg);
+    cg.connect(cd);
+
+    combDelays.push(cd);
+    combFilters.push(cf);
+    combGains.push(cg);
+  }
+
+  // Allpass stereo decorrelators
+  function makeAllpass(delaySec, gainVal) {
+    const d = ctx.createDelay(0.05);
+    d.delayTime.value = delaySec;
+    const gIn = ctx.createGain(); gIn.gain.value = gainVal;
+    const gOut = ctx.createGain(); gOut.gain.value = -gainVal;
+    const gFeed = ctx.createGain(); gFeed.gain.value = 1 - gainVal * gainVal;
+
+    const apIn = ctx.createGain();
+    const apOut = ctx.createGain();
+
+    apIn.connect(gOut); gOut.connect(apOut);
+    apIn.connect(d); d.connect(gFeed); gFeed.connect(apOut);
+    d.connect(gIn); gIn.connect(d);
+    return { input: apIn, output: apOut };
+  }
+
+  const apL1 = makeAllpass(0.0051, 0.6);
+  const apL2 = makeAllpass(0.0017, 0.6);
+  const apR1 = makeAllpass(0.0057, 0.6);
+  const apR2 = makeAllpass(0.0021, 0.6);
+
+  combDelays[0].connect(apL1.input);
+  combDelays[2].connect(apL1.input);
+  combDelays[4].connect(apL1.input);
+  apL1.output.connect(apL2.input);
+
+  combDelays[1].connect(apR1.input);
+  combDelays[3].connect(apR1.input);
+  combDelays[5].connect(apR1.input);
+  apR1.output.connect(apR2.input);
+
+  const stereoMerger = ctx.createChannelMerger(2);
+  apL2.output.connect(stereoMerger, 0, 0);
+  apR2.output.connect(stereoMerger, 0, 1);
+
+  stereoMerger.connect(revWet);
+  revWet.connect(reverbOut);
+
+  // Shimmer feedback pitch-shift loop
+  const shimmerTap = ctx.createGain();
+  stereoMerger.connect(shimmerTap);
+
+  const shimmerHp = ctx.createBiquadFilter();
+  shimmerHp.type = 'highpass';
+  shimmerHp.frequency.value = 350;
+
+  const shimmerLp = ctx.createBiquadFilter();
+  shimmerLp.type = 'lowpass';
+  shimmerLp.frequency.value = p.shimmerTone;
+
+  shimmerTap.connect(shimmerHp);
+  shimmerHp.connect(shimmerLp);
+
+  // Pitch shifter
+  let currentPitchRatio = getPitchRatioForInterval(p.shimmerInterval);
+  let { bufA, bufB } = createPitchShiftModBuffers(ctx, currentPitchRatio);
+
+  const delA = ctx.createDelay(0.08);
+  const delB = ctx.createDelay(0.08);
+  delA.delayTime.value = 0;
+  delB.delayTime.value = 0;
+
+  const envA = ctx.createGain();
+  const envB = ctx.createGain();
+  envA.gain.value = 0;
+  envB.gain.value = 0;
+
+  shimmerLp.connect(delA); delA.connect(envA);
+  shimmerLp.connect(delB); delB.connect(envB);
+
+  const shimmerSum = ctx.createGain();
+  envA.connect(shimmerSum);
+  envB.connect(shimmerSum);
+
+  let modSrcA = ctx.createBufferSource(); modSrcA.buffer = bufA; modSrcA.loop = true;
+  let modSrcB = ctx.createBufferSource(); modSrcB.buffer = bufB; modSrcB.loop = true;
+  const splitA = ctx.createChannelSplitter(2);
+  const splitB = ctx.createChannelSplitter(2);
+
+  modSrcA.connect(splitA);
+  modSrcB.connect(splitB);
+
+  splitA.connect(delA.delayTime, 0);
+  splitA.connect(envA.gain, 1);
+  splitB.connect(delB.delayTime, 0);
+  splitB.connect(envB.gain, 1);
+
+  // Shimmer loop limiter
+  const shimmerLimiter = ctx.createDynamicsCompressor();
+  shimmerLimiter.threshold.value = -12;
+  shimmerLimiter.knee.value = 6;
+  shimmerLimiter.ratio.value = 14;
+  shimmerLimiter.attack.value = 0.003;
+  shimmerLimiter.release.value = 0.15;
+
+  const shimmerFeedbackGain = ctx.createGain();
+  shimmerFeedbackGain.gain.value = p.shimmerAmount * 0.72;
+
+  shimmerSum.connect(shimmerLimiter);
+  shimmerLimiter.connect(shimmerFeedbackGain);
+  shimmerFeedbackGain.connect(combInSum);
+
+  reverbOut.connect(wetMaster);
+
+  function applyGains(params) {
+    const isMaster = !!params.masterEnabled;
+    const now = ctx.currentTime;
+    dryMaster.gain.setTargetAtTime(isMaster ? 0 : 1, now, 0.03);
+    wetMaster.gain.setTargetAtTime(isMaster ? 1 : 0, now, 0.03);
+
+    const isTape = !!params.tapeEnabled && isMaster;
+    tapeDry.gain.setTargetAtTime(isTape ? 0 : 1, now, 0.03);
+    tapeWet.gain.setTargetAtTime(isTape ? 1 : 0, now, 0.03);
+
+    const isShimmer = !!params.shimmerEnabled && isMaster;
+    const mix = isShimmer ? params.reverbMix : 0;
+    revDry.gain.setTargetAtTime(1 - mix * 0.45, now, 0.03);
+    revWet.gain.setTargetAtTime(mix * 1.2, now, 0.03);
+  }
+  applyGains(p);
+
+  wowOsc.start(0);
+  flutterOsc.start(0);
+  modSrcA.start(0);
+  modSrcB.start(0);
+
+  function update(params) {
+    const now = ctx.currentTime;
+    applyGains(params);
+
+    wowOsc.frequency.setTargetAtTime(params.tapeWowRate, now, 0.05);
+    wowGain.gain.setTargetAtTime(params.tapeWow * 0.0035, now, 0.05);
+    flutterOsc.frequency.setTargetAtTime(params.tapeFlutterRate, now, 0.05);
+    flutterGain.gain.setTargetAtTime(params.tapeFlutter * 0.0012, now, 0.05);
+
+    headBump.gain.setTargetAtTime(params.tapeDrive * 3.0, now, 0.05);
+    tapeHighCut.frequency.setTargetAtTime(Math.max(3500, 18500 - params.tapeAge * 11500), now, 0.05);
+    tapeShaper.curve = createTapeWaveShaperCurve(params.tapeDrive);
+
+    for (let i = 0; i < combDelaysSec.length; i++) {
+      const g = Math.min(0.94, Math.pow(10, (-3 * combDelaysSec[i]) / Math.max(0.8, params.reverbDecay)));
+      combGains[i].gain.setTargetAtTime(g, now, 0.05);
+      combFilters[i].frequency.setTargetAtTime(Math.max(1200, Math.min(14000, params.shimmerTone * 0.9)), now, 0.05);
+    }
+
+    shimmerLp.frequency.setTargetAtTime(params.shimmerTone, now, 0.05);
+    shimmerFeedbackGain.gain.setTargetAtTime(params.shimmerAmount * 0.72, now, 0.05);
+
+    const newRatio = getPitchRatioForInterval(params.shimmerInterval);
+    if (Math.abs(newRatio - currentPitchRatio) > 0.001) {
+      currentPitchRatio = newRatio;
+      const newBufs = createPitchShiftModBuffers(ctx, currentPitchRatio);
+      try {
+        modSrcA.stop(); modSrcB.stop();
+        modSrcA.disconnect(); modSrcB.disconnect();
+      } catch (e) {}
+      modSrcA = ctx.createBufferSource(); modSrcA.buffer = newBufs.bufA; modSrcA.loop = true;
+      modSrcB = ctx.createBufferSource(); modSrcB.buffer = newBufs.bufB; modSrcB.loop = true;
+      modSrcA.connect(splitA);
+      modSrcB.connect(splitB);
+      modSrcA.start(0);
+      modSrcB.start(0);
+    }
+  }
+
+  function dispose() {
+    try { wowOsc.stop(); wowOsc.disconnect(); } catch (e) {}
+    try { flutterOsc.stop(); flutterOsc.disconnect(); } catch (e) {}
+    try { modSrcA.stop(); modSrcA.disconnect(); } catch (e) {}
+    try { modSrcB.stop(); modSrcB.disconnect(); } catch (e) {}
+    try { inputNode.disconnect(); } catch (e) {}
+    try { outputNode.disconnect(); } catch (e) {}
+  }
+
+  return {
+    input: inputNode,
+    output: outputNode,
+    update,
+    dispose
+  };
+}
+
+async function bakeCinematicFX(channels, sr, params) {
+  const numChannels = channels.length;
+  const numSamples = channels[0].length;
+
+  if (!params.masterEnabled || (!params.shimmerEnabled && !params.tapeEnabled)) {
+    return channels.map(ch => ch.slice());
+  }
+
+  let tailSec = 0;
+  if (params.shimmerEnabled && params.reverbMix > 0.05) {
+    tailSec = Math.min(6.5, Math.max(1.2, params.reverbDecay * 0.4));
+  }
+  const tailSamples = Math.floor(sr * tailSec);
+  const totalSamples = numSamples + tailSamples;
+
+  const OfflineAudioCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const offlineCtx = new OfflineAudioCtxClass(2, totalSamples, sr);
+
+  const inBuf = offlineCtx.createBuffer(Math.max(1, numChannels), numSamples, sr);
+  for (let c = 0; c < numChannels; c++) {
+    inBuf.copyToChannel(channels[c], c);
+  }
+
+  const src = offlineCtx.createBufferSource();
+  src.buffer = inBuf;
+
+  const fxChain = createCinematicFXChain(offlineCtx, true, params);
+  src.connect(fxChain.input);
+  fxChain.output.connect(offlineCtx.destination);
+
+  src.start(0);
+  const rendered = await offlineCtx.startRendering();
+
+  return [
+    rendered.getChannelData(0).slice(),
+    rendered.getChannelData(1).slice()
+  ];
+}
+
+function updateBakeFxBtnState() {
+  if (!bakeFxBtn) return;
+  bakeFxBtn.disabled = !stretchedChannels || stretchedChannels.length === 0;
+}
+
+if (bakeFxBtn) {
+  bakeFxBtn.onclick = async () => {
+    if (!stretchedChannels) return;
+    if (!isCinematicFXEnabled()) {
+      if (fxBakeStatus) {
+        fxBakeStatus.textContent = 'Enable Cinematic FX first';
+        setTimeout(() => { if (fxBakeStatus) fxBakeStatus.textContent = ''; }, 2500);
+      }
+      return;
+    }
+    bakeFxBtn.disabled = true;
+    if (fxBakeStatus) fxBakeStatus.textContent = 'Baking FX...';
+    const originalStatus = statusDisplay.textContent;
+    statusDisplay.textContent = 'Baking Cinematic FX...';
+    try {
+      initAudioContext();
+      const baked = await bakeCinematicFX(stretchedChannels, stretchedSampleRate, getCinematicFXParams());
+      stretchedChannels = baked;
+      drawWaveform(outputCanvas, outCtx, stretchedChannels[0], '#ec4899');
+      renderOutputRuler();
+      if (fxBakeStatus) {
+        fxBakeStatus.textContent = '✓ Baked into Soundscape!';
+        setTimeout(() => { if (fxBakeStatus) fxBakeStatus.textContent = ''; }, 3500);
+      }
+      statusDisplay.textContent = 'Rendered (+ FX Baked)';
+    } catch (err) {
+      console.error('Failed to bake FX:', err);
+      if (fxBakeStatus) fxBakeStatus.textContent = 'Bake failed';
+      statusDisplay.textContent = originalStatus;
+    } finally {
+      bakeFxBtn.disabled = false;
+    }
+  };
+}
+
+async function finishRender(outChannels, sr) {
   if (arpEnabledInput.checked) outChannels = applyArpeggiator(outChannels, sr);
+  if (autoBakeFxOnRender && autoBakeFxOnRender.checked && isCinematicFXEnabled()) {
+    progressWrap.classList.add('active');
+    progressFill.style.width = '92%';
+    progressLabel.textContent = 'Baking Cinematic FX (Shimmer & Tape)...';
+    try {
+      outChannels = await bakeCinematicFX(outChannels, sr, getCinematicFXParams());
+    } catch (err) {
+      console.warn('Auto-bake FX error:', err);
+    }
+  }
   stretchedChannels = outChannels;
   stretchedSampleRate = sr;
   drawWaveform(outputCanvas, outCtx, stretchedChannels[0], '#ec4899');
   renderOutputRuler();
   progressWrap.classList.remove('active');
-  statusDisplay.textContent = arpEnabledInput.checked ? 'Rendered (arpeggiated)' : 'Rendered';
+  statusDisplay.textContent = arpEnabledInput.checked ? 'Rendered (arpeggiated)' : (autoBakeFxOnRender && autoBakeFxOnRender.checked && isCinematicFXEnabled() ? 'Rendered (+ FX)' : 'Rendered');
   processBtn.disabled = false; freezeBtn.disabled = false; playBtn.disabled = false; downloadBtn.disabled = false; previewBtn.disabled = false;
+  updateBakeFxBtnState();
 }
 
 // ---------------------------------------------------------------------------
@@ -2433,8 +3335,10 @@ function updateLiveFilters() {
   if (!liveNodes) return;
   liveNodes.lowpass.frequency.setTargetAtTime(parseFloat(lowpassInput.value), audioCtx.currentTime, 0.05);
   liveNodes.highpass.frequency.setTargetAtTime(parseFloat(highpassInput.value), audioCtx.currentTime, 0.05);
-  liveNodes.feedback.gain.setTargetAtTime(parseFloat(reverbInput.value), audioCtx.currentTime, 0.05);
   liveNodes.masterGain.gain.setTargetAtTime(parseFloat(volumeInput.value), audioCtx.currentTime, 0.05);
+  if (liveNodes.fxChain) {
+    liveNodes.fxChain.update(getCinematicFXParams());
+  }
 }
 function startPlaybackAt(offsetSec) {
   stopPlaybackInternal();
@@ -2446,12 +3350,18 @@ function startPlaybackAt(offsetSec) {
   const highpass = audioCtx.createBiquadFilter(); highpass.type = 'highpass'; highpass.frequency.value = parseFloat(highpassInput.value);
   const lowpass = audioCtx.createBiquadFilter(); lowpass.type = 'lowpass'; lowpass.frequency.value = parseFloat(lowpassInput.value);
   const masterGain = audioCtx.createGain(); masterGain.gain.value = parseFloat(volumeInput.value);
-  const delay = audioCtx.createDelay(2.0); delay.delayTime.value = 0.35;
-  const feedback = audioCtx.createGain(); feedback.gain.value = parseFloat(reverbInput.value);
-  src.connect(highpass); highpass.connect(lowpass); lowpass.connect(masterGain); masterGain.connect(audioCtx.destination);
-  lowpass.connect(delay); delay.connect(feedback); feedback.connect(delay); feedback.connect(masterGain);
+  
+  // Cinematic FX Chain (Shimmer Reverb + Tape Flutter & Wow)
+  const fxChain = createCinematicFXChain(audioCtx, false, getCinematicFXParams());
+  
+  src.connect(highpass);
+  highpass.connect(lowpass);
+  lowpass.connect(fxChain.input);
+  fxChain.output.connect(masterGain);
+  masterGain.connect(audioCtx.destination);
+  
   src.start(0, offset);
-  liveNodes = { src, highpass, lowpass, masterGain, delay, feedback };
+  liveNodes = { src, highpass, lowpass, masterGain, fxChain };
   playbackStartCtxTime = audioCtx.currentTime;
   playbackOffset = offset;
   isPlaying = true;
@@ -2466,7 +3376,10 @@ playBtn.onclick = () => {
   statusDisplay.textContent = 'Playing (looped)';
 };
 function stopPlaybackInternal() {
-  if (liveNodes && liveNodes.src) { try { liveNodes.src.stop(); } catch (e) {} liveNodes.src.disconnect(); }
+  if (liveNodes) {
+    if (liveNodes.src) { try { liveNodes.src.stop(); } catch (e) {} liveNodes.src.disconnect(); }
+    if (liveNodes.fxChain) { try { liveNodes.fxChain.dispose(); } catch (e) {} }
+  }
   liveNodes = null;
   cancelAnimationFrame(playheadRAF);
 }
