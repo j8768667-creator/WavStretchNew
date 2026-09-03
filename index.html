@@ -2851,7 +2851,16 @@ processBtn.onclick = async () => {
         formantShift: baseOpts.formantShift,
         eqParams: baseOpts.eqParams
       };
-      const layerResult = await runStretchJob('stretch', layerChannels[0], layerSr, layerOpts, p => reportProgress(stepIndex, totalSteps, p, layer.name));
+      let layerResult = await runStretchJob('stretch', layerChannels[0], layerSr, layerOpts, p => reportProgress(stepIndex, totalSteps, p, layer.name));
+
+      // IMPORTANT: apply the per-layer arpeggiator BEFORE mixing this layer into
+      // the master output. The master arpeggiator is intentionally applied later
+      // in finishRender(), so a layer ARP must operate on the isolated layer
+      // signal or it would either be bypassed or arpeggiate the whole mix.
+      if (layer.arpEnabled) {
+        layerResult = applyLayerArpeggiator([layerResult], sr, layer)[0];
+      }
+
       const offsetSamples = Math.round((layer.startOffset || 0) * sr);
       mixLayerIntoOutChannels(outChannels, layerResult, layer.gain, offsetSamples);
       stepIndex++;
