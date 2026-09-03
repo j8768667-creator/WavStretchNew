@@ -2051,14 +2051,28 @@ function renderLayerList() {
 // Waveform drawing
 // ---------------------------------------------------------------------------
 function drawWaveform(canvas, ctx, data, color) {
-  const width = canvas.width = canvas.parentElement.clientWidth;
-  const height = canvas.height = canvas.parentElement.clientHeight;
-  const step = Math.max(1, Math.ceil(data.length / width));
+  if (!canvas || !ctx) return;
+  const parent = canvas.parentElement;
+  const width = canvas.width = (parent && parent.clientWidth > 0) ? parent.clientWidth : 800;
+  const height = canvas.height = (parent && parent.clientHeight > 0) ? parent.clientHeight : 120;
   const amp = height / 2;
   ctx.clearRect(0, 0, width, height);
+
+  // Draw subtle center baseline guide
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, amp);
+  ctx.lineTo(width, amp);
+  ctx.stroke();
+
+  if (!data || !data.length) return;
+
+  const step = Math.max(1, Math.ceil(data.length / width));
   ctx.beginPath();
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.5;
+
   for (let i = 0; i < width; i++) {
     let min = 1.0, max = -1.0;
     const base = i * step;
@@ -2066,12 +2080,21 @@ function drawWaveform(canvas, ctx, data, color) {
       const idx = base + j;
       if (idx >= data.length) break;
       const datum = data[idx];
+      if (!isFinite(datum)) continue;
       if (datum < min) min = datum;
       if (datum > max) max = datum;
     }
     if (min > max) { min = 0; max = 0; }
-    ctx.moveTo(i, (1 + min) * amp);
-    ctx.lineTo(i, (1 + max) * amp);
+    
+    // Ensure at least 1.5px vertical span so soft ambient drones render visibly
+    let yTop = (1 + min) * amp;
+    let yBot = (1 + max) * amp;
+    if (Math.abs(yBot - yTop) < 1.5) {
+      yTop = amp - 1;
+      yBot = amp + 1;
+    }
+    ctx.moveTo(i, yTop);
+    ctx.lineTo(i, yBot);
   }
   ctx.stroke();
 }
@@ -2502,7 +2525,7 @@ async function renderBandFiltered(sourceArr, sampleRate, filterSpecs) {
   const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
   const offline = new OfflineCtx(1, sourceArr.length, sampleRate);
   const buf = offline.createBuffer(1, sourceArr.length, sampleRate);
-  buf.copyToChannel(sourceArr, 0);
+  buf.getChannelData(0).set(sourceArr);
   const src = offline.createBufferSource();
   src.buffer = buf;
   let node = src;
@@ -2974,7 +2997,7 @@ previewBtn.onclick = async () => {
 function playOneShotBuffer(floatArr, sr) {
   if (previewSrc) { try { previewSrc.stop(); } catch (e) {} }
   const buf = audioCtx.createBuffer(1, floatArr.length, sr);
-  buf.copyToChannel(floatArr, 0);
+  buf.getChannelData(0).set(floatArr);
   const src = audioCtx.createBufferSource();
   src.buffer = buf;
   const gain = audioCtx.createGain();
@@ -3015,31 +3038,75 @@ function getPitchRatioForInterval(interval) {
   }
 }
 
-function createPitchShiftModBuffers(ctx, pitchRatio, grainSec = 0.045) {
+// Generate an ethereal, studio-grade shimmer convolution impulse response
+// 100% unconditionally stable, zero-feedback, never produces NaN or feedback runaway
+function createShimmerImpulse(ctx, decaySec, shimmerAmount, shimmerTone, interval) {
   const sr = ctx.sampleRate;
-  const numSamples = Math.max(64, Math.floor(grainSec * sr));
-  const bufA = ctx.createBuffer(2, numSamples, sr);
-  const bufB = ctx.createBuffer(2, numSamples, sr);
+  decaySec = Math.max(1.0, Math.min(16.0, decaySec || 8.0));
+  shimmerAmount = Math.max(0, Math.min(1, shimmerAmount !== undefined ? shimmerAmount : 0.65));
+  shimmerTone = Math.max(1000, Math.min(16000, shimmerTone || 8500));
   
-  const delA = bufA.getChannelData(0);
-  const gainA = bufA.getChannelData(1);
-  const delB = bufB.getChannelData(0);
-  const gainB = bufB.getChannelData(1);
+  const length = Math.min(sr * 6.5, Math.max(sr * 1.2, Math.floor(sr * decaySec * 0.45)));
+  const ir = ctx.createBuffer(2, length, sr);
+  const left = ir.getChannelData(0);
+  const right = ir.getChannelData(1);
   
-  const baseDelay = 0.024;
-  const slope = -(pitchRatio - 1);
+  const tau = decaySec * 0.18;
+  const shimmerRatio = getPitchRatioForInterval(interval);
   
-  for (let i = 0; i < numSamples; i++) {
-    const phaseA = i / numSamples;
-    const phaseB = (phaseA + 0.5) % 1.0;
-    
-    delA[i] = Math.max(0.002, Math.min(0.048, baseDelay + slope * (phaseA - 0.5) * grainSec));
-    delB[i] = Math.max(0.002, Math.min(0.048, baseDelay + slope * (phaseB - 0.5) * grainSec));
-    
-    gainA[i] = 0.5 * (1 - Math.cos(2 * Math.PI * phaseA));
-    gainB[i] = 0.5 * (1 - Math.cos(2 * Math.PI * phaseB));
+  // Early reflection taps (ms) for rich spatial depth
+  const earlyL = [0.013, 0.027, 0.041, 0.057, 0.079, 0.103];
+  const earlyR = [0.017, 0.023, 0.047, 0.063, 0.083, 0.097];
+  for (let i = 0; i < earlyL.length; i++) {
+    const idxL = Math.floor(earlyL[i] * sr);
+    const idxR = Math.floor(earlyR[i] * sr);
+    const g = Math.pow(0.75, i);
+    if (idxL < length) left[idxL] += g * (i % 2 === 0 ? 0.4 : -0.4);
+    if (idxR < length) right[idxR] += g * (i % 2 === 0 ? -0.4 : 0.4);
   }
-  return { bufA, bufB };
+  
+  // Diffuse tail with lowpass damping & celestial shimmer harmonic bloom
+  let lpL = 0, lpR = 0;
+  const lpCoeff = Math.min(0.85, Math.max(0.1, shimmerTone / (sr * 0.5)));
+  const shimmerF1 = 880 * shimmerRatio;
+  const shimmerF2 = 1320 * shimmerRatio;
+  
+  for (let i = 0; i < length; i++) {
+    const t = i / sr;
+    const env = Math.exp(-t / tau);
+    
+    // Stereo white noise burst diffused
+    const noiseL = (Math.random() * 2 - 1);
+    const noiseR = (Math.random() * 2 - 1);
+    
+    // One-pole lowpass filter simulation for natural air absorption
+    lpL += lpCoeff * (noiseL - lpL);
+    lpR += lpCoeff * (noiseR - lpR);
+    
+    // Shimmer harmonic bloom: swells after early reflections then decays with tail
+    const bloom = shimmerAmount * Math.sin(Math.PI * Math.min(1, t / (decaySec * 0.35))) * env;
+    const shimmerSinL = (Math.sin(2 * Math.PI * shimmerF1 * t) * 0.6 + Math.sin(2 * Math.PI * shimmerF2 * t) * 0.4) * bloom * 0.35;
+    const shimmerSinR = (Math.cos(2 * Math.PI * shimmerF1 * t) * 0.6 + Math.cos(2 * Math.PI * shimmerF2 * t) * 0.4) * bloom * 0.35;
+    
+    left[i] += (lpL * env + shimmerSinL);
+    right[i] += (lpR * env + shimmerSinR);
+  }
+  
+  // Normalize IR peak to 0.85
+  let peak = 0;
+  for (let i = 0; i < length; i++) {
+    const aL = Math.abs(left[i]), aR = Math.abs(right[i]);
+    if (aL > peak) peak = aL;
+    if (aR > peak) peak = aR;
+  }
+  if (peak > 0) {
+    const norm = 0.85 / peak;
+    for (let i = 0; i < length; i++) {
+      left[i] *= norm;
+      right[i] *= norm;
+    }
+  }
+  return ir;
 }
 
 function createCinematicFXChain(ctx, isOffline = false, initialParams = {}) {
@@ -3071,7 +3138,7 @@ function createCinematicFXChain(ctx, isOffline = false, initialParams = {}) {
   wetMaster.connect(outputNode);
 
   // -------------------------------------------------------------------------
-  // Stage 1: Tape Flutter & Wow
+  // Stage 1: Tape Flutter, Wow & Saturation (Unconditionally stable feedforward)
   // -------------------------------------------------------------------------
   const tapeIn = ctx.createGain();
   const tapeOut = ctx.createGain();
@@ -3083,15 +3150,15 @@ function createCinematicFXChain(ctx, isOffline = false, initialParams = {}) {
   tapeDry.connect(tapeOut);
   tapeIn.connect(tapeWet);
 
-  // Delay node with wow and flutter modulation
+  // Feedforward delay node with wow and flutter modulation
   const tapeDelay = ctx.createDelay(0.15);
-  tapeDelay.delayTime.value = 0.024; // 24ms base delay
+  tapeDelay.delayTime.value = 0.030; // 30ms safe base delay
 
   const wowOsc = ctx.createOscillator();
   wowOsc.type = 'sine';
   wowOsc.frequency.value = p.tapeWowRate;
   const wowGain = ctx.createGain();
-  wowGain.gain.value = p.tapeWow * 0.0035;
+  wowGain.gain.value = p.tapeWow * 0.0025;
   wowOsc.connect(wowGain);
   wowGain.connect(tapeDelay.delayTime);
 
@@ -3099,7 +3166,7 @@ function createCinematicFXChain(ctx, isOffline = false, initialParams = {}) {
   flutterOsc.type = 'triangle';
   flutterOsc.frequency.value = p.tapeFlutterRate;
   const flutterGain = ctx.createGain();
-  flutterGain.gain.value = p.tapeFlutter * 0.0012;
+  flutterGain.gain.value = p.tapeFlutter * 0.0010;
   flutterOsc.connect(flutterGain);
   flutterGain.connect(tapeDelay.delayTime);
 
@@ -3115,9 +3182,9 @@ function createCinematicFXChain(ctx, isOffline = false, initialParams = {}) {
   tapeHighCut.type = 'lowpass';
   tapeHighCut.frequency.value = Math.max(3500, 18500 - p.tapeAge * 11500);
 
-  // Tape saturation curve
+  // Tape saturation curve (oversample: 'none' for rock-solid stability in all browsers)
   const tapeShaper = ctx.createWaveShaper();
-  tapeShaper.oversample = '4x';
+  tapeShaper.oversample = 'none';
   tapeShaper.curve = createTapeWaveShaperCurve(p.tapeDrive);
 
   tapeWet.connect(tapeDelay);
@@ -3127,7 +3194,7 @@ function createCinematicFXChain(ctx, isOffline = false, initialParams = {}) {
   tapeShaper.connect(tapeOut);
 
   // -------------------------------------------------------------------------
-  // Stage 2: Shimmer Reverb Engine
+  // Stage 2: Shimmer Reverb Engine (Convolution-based, 100% stable & pristine)
   // -------------------------------------------------------------------------
   const reverbIn = ctx.createGain();
   const reverbOut = ctx.createGain();
@@ -3138,138 +3205,18 @@ function createCinematicFXChain(ctx, isOffline = false, initialParams = {}) {
   reverbIn.connect(revDry);
   revDry.connect(reverbOut);
 
-  // 6 comb filter delay lines for spatial diffusion
-  const combDelaysSec = [0.0297, 0.0371, 0.0411, 0.0493, 0.0587, 0.0673];
-  const combDelays = [];
-  const combFilters = [];
-  const combGains = [];
-  const combInSum = ctx.createGain();
-  reverbIn.connect(combInSum);
+  const convolver = ctx.createConvolver();
+  convolver.buffer = createShimmerImpulse(ctx, p.reverbDecay, p.shimmerAmount, p.shimmerTone, p.shimmerInterval);
+  
+  // Shimmer tone filter on wet return
+  const wetTone = ctx.createBiquadFilter();
+  wetTone.type = 'lowpass';
+  wetTone.frequency.value = p.shimmerTone;
 
-  for (let i = 0; i < combDelaysSec.length; i++) {
-    const cd = ctx.createDelay(0.2);
-    cd.delayTime.value = combDelaysSec[i];
-
-    const cf = ctx.createBiquadFilter();
-    cf.type = 'lowpass';
-    cf.frequency.value = Math.max(1200, Math.min(14000, p.shimmerTone * 0.9));
-
-    const cg = ctx.createGain();
-    const g = Math.min(0.94, Math.pow(10, (-3 * combDelaysSec[i]) / Math.max(0.8, p.reverbDecay)));
-    cg.gain.value = g;
-
-    combInSum.connect(cd);
-    cd.connect(cf);
-    cf.connect(cg);
-    cg.connect(cd);
-
-    combDelays.push(cd);
-    combFilters.push(cf);
-    combGains.push(cg);
-  }
-
-  // Allpass stereo decorrelators
-  function makeAllpass(delaySec, gainVal) {
-    const d = ctx.createDelay(0.05);
-    d.delayTime.value = delaySec;
-    const gIn = ctx.createGain(); gIn.gain.value = gainVal;
-    const gOut = ctx.createGain(); gOut.gain.value = -gainVal;
-    const gFeed = ctx.createGain(); gFeed.gain.value = 1 - gainVal * gainVal;
-
-    const apIn = ctx.createGain();
-    const apOut = ctx.createGain();
-
-    apIn.connect(gOut); gOut.connect(apOut);
-    apIn.connect(d); d.connect(gFeed); gFeed.connect(apOut);
-    d.connect(gIn); gIn.connect(d);
-    return { input: apIn, output: apOut };
-  }
-
-  const apL1 = makeAllpass(0.0051, 0.6);
-  const apL2 = makeAllpass(0.0017, 0.6);
-  const apR1 = makeAllpass(0.0057, 0.6);
-  const apR2 = makeAllpass(0.0021, 0.6);
-
-  combDelays[0].connect(apL1.input);
-  combDelays[2].connect(apL1.input);
-  combDelays[4].connect(apL1.input);
-  apL1.output.connect(apL2.input);
-
-  combDelays[1].connect(apR1.input);
-  combDelays[3].connect(apR1.input);
-  combDelays[5].connect(apR1.input);
-  apR1.output.connect(apR2.input);
-
-  const stereoMerger = ctx.createChannelMerger(2);
-  apL2.output.connect(stereoMerger, 0, 0);
-  apR2.output.connect(stereoMerger, 0, 1);
-
-  stereoMerger.connect(revWet);
+  reverbIn.connect(convolver);
+  convolver.connect(wetTone);
+  wetTone.connect(revWet);
   revWet.connect(reverbOut);
-
-  // Shimmer feedback pitch-shift loop
-  const shimmerTap = ctx.createGain();
-  stereoMerger.connect(shimmerTap);
-
-  const shimmerHp = ctx.createBiquadFilter();
-  shimmerHp.type = 'highpass';
-  shimmerHp.frequency.value = 350;
-
-  const shimmerLp = ctx.createBiquadFilter();
-  shimmerLp.type = 'lowpass';
-  shimmerLp.frequency.value = p.shimmerTone;
-
-  shimmerTap.connect(shimmerHp);
-  shimmerHp.connect(shimmerLp);
-
-  // Pitch shifter
-  let currentPitchRatio = getPitchRatioForInterval(p.shimmerInterval);
-  let { bufA, bufB } = createPitchShiftModBuffers(ctx, currentPitchRatio);
-
-  const delA = ctx.createDelay(0.08);
-  const delB = ctx.createDelay(0.08);
-  delA.delayTime.value = 0;
-  delB.delayTime.value = 0;
-
-  const envA = ctx.createGain();
-  const envB = ctx.createGain();
-  envA.gain.value = 0;
-  envB.gain.value = 0;
-
-  shimmerLp.connect(delA); delA.connect(envA);
-  shimmerLp.connect(delB); delB.connect(envB);
-
-  const shimmerSum = ctx.createGain();
-  envA.connect(shimmerSum);
-  envB.connect(shimmerSum);
-
-  let modSrcA = ctx.createBufferSource(); modSrcA.buffer = bufA; modSrcA.loop = true;
-  let modSrcB = ctx.createBufferSource(); modSrcB.buffer = bufB; modSrcB.loop = true;
-  const splitA = ctx.createChannelSplitter(2);
-  const splitB = ctx.createChannelSplitter(2);
-
-  modSrcA.connect(splitA);
-  modSrcB.connect(splitB);
-
-  splitA.connect(delA.delayTime, 0);
-  splitA.connect(envA.gain, 1);
-  splitB.connect(delB.delayTime, 0);
-  splitB.connect(envB.gain, 1);
-
-  // Shimmer loop limiter
-  const shimmerLimiter = ctx.createDynamicsCompressor();
-  shimmerLimiter.threshold.value = -12;
-  shimmerLimiter.knee.value = 6;
-  shimmerLimiter.ratio.value = 14;
-  shimmerLimiter.attack.value = 0.003;
-  shimmerLimiter.release.value = 0.15;
-
-  const shimmerFeedbackGain = ctx.createGain();
-  shimmerFeedbackGain.gain.value = p.shimmerAmount * 0.72;
-
-  shimmerSum.connect(shimmerLimiter);
-  shimmerLimiter.connect(shimmerFeedbackGain);
-  shimmerFeedbackGain.connect(combInSum);
 
   reverbOut.connect(wetMaster);
 
@@ -3286,8 +3233,8 @@ function createCinematicFXChain(ctx, isOffline = false, initialParams = {}) {
 
       const isShimmer = !!params.shimmerEnabled && isMaster;
       const mix = isShimmer ? params.reverbMix : 0;
-      revDry.gain.setValueAtTime(1 - mix * 0.45, 0);
-      revWet.gain.setValueAtTime(mix * 1.2, 0);
+      revDry.gain.setValueAtTime(Math.max(0, 1 - mix * 0.45), 0);
+      revWet.gain.setValueAtTime(mix * 0.95, 0);
       return;
     }
     dryMaster.gain.setTargetAtTime(isMaster ? 0 : 1, now, 0.03);
@@ -3299,62 +3246,64 @@ function createCinematicFXChain(ctx, isOffline = false, initialParams = {}) {
 
     const isShimmer = !!params.shimmerEnabled && isMaster;
     const mix = isShimmer ? params.reverbMix : 0;
-    revDry.gain.setTargetAtTime(1 - mix * 0.45, now, 0.03);
-    revWet.gain.setTargetAtTime(mix * 1.2, now, 0.03);
+    revDry.gain.setTargetAtTime(Math.max(0, 1 - mix * 0.45), now, 0.03);
+    revWet.gain.setTargetAtTime(mix * 0.95, now, 0.03);
   }
   applyGains(p);
 
-  wowOsc.start(0);
-  flutterOsc.start(0);
-  modSrcA.start(0);
-  modSrcB.start(0);
+  try { wowOsc.start(0); } catch (e) {}
+  try { flutterOsc.start(0); } catch (e) {}
+
+  let currentDecay = p.reverbDecay;
+  let currentShimmer = p.shimmerAmount;
+  let currentTone = p.shimmerTone;
+  let currentInterval = p.shimmerInterval;
+  let irDebounceTimer = null;
 
   function update(params) {
     const now = ctx.currentTime;
     applyGains(params);
 
     wowOsc.frequency.setTargetAtTime(params.tapeWowRate, now, 0.05);
-    wowGain.gain.setTargetAtTime(params.tapeWow * 0.0035, now, 0.05);
+    wowGain.gain.setTargetAtTime(params.tapeWow * 0.0025, now, 0.05);
     flutterOsc.frequency.setTargetAtTime(params.tapeFlutterRate, now, 0.05);
-    flutterGain.gain.setTargetAtTime(params.tapeFlutter * 0.0012, now, 0.05);
+    flutterGain.gain.setTargetAtTime(params.tapeFlutter * 0.0010, now, 0.05);
 
     headBump.gain.setTargetAtTime(params.tapeDrive * 3.0, now, 0.05);
     tapeHighCut.frequency.setTargetAtTime(Math.max(3500, 18500 - params.tapeAge * 11500), now, 0.05);
     tapeShaper.curve = createTapeWaveShaperCurve(params.tapeDrive);
+    wetTone.frequency.setTargetAtTime(params.shimmerTone, now, 0.05);
 
-    for (let i = 0; i < combDelaysSec.length; i++) {
-      const g = Math.min(0.94, Math.pow(10, (-3 * combDelaysSec[i]) / Math.max(0.8, params.reverbDecay)));
-      combGains[i].gain.setTargetAtTime(g, now, 0.05);
-      combFilters[i].frequency.setTargetAtTime(Math.max(1200, Math.min(14000, params.shimmerTone * 0.9)), now, 0.05);
-    }
-
-    shimmerLp.frequency.setTargetAtTime(params.shimmerTone, now, 0.05);
-    shimmerFeedbackGain.gain.setTargetAtTime(params.shimmerAmount * 0.72, now, 0.05);
-
-    const newRatio = getPitchRatioForInterval(params.shimmerInterval);
-    if (Math.abs(newRatio - currentPitchRatio) > 0.001) {
-      currentPitchRatio = newRatio;
-      const newBufs = createPitchShiftModBuffers(ctx, currentPitchRatio);
-      try {
-        modSrcA.stop(); modSrcB.stop();
-        modSrcA.disconnect(); modSrcB.disconnect();
-      } catch (e) {}
-      modSrcA = ctx.createBufferSource(); modSrcA.buffer = newBufs.bufA; modSrcA.loop = true;
-      modSrcB = ctx.createBufferSource(); modSrcB.buffer = newBufs.bufB; modSrcB.loop = true;
-      modSrcA.connect(splitA);
-      modSrcB.connect(splitB);
-      modSrcA.start(0);
-      modSrcB.start(0);
+    // If reverb IR parameters changed, update convolver impulse response smoothly
+    if (
+      Math.abs(params.reverbDecay - currentDecay) > 0.3 ||
+      Math.abs(params.shimmerAmount - currentShimmer) > 0.08 ||
+      Math.abs(params.shimmerTone - currentTone) > 400 ||
+      params.shimmerInterval !== currentInterval
+    ) {
+      currentDecay = params.reverbDecay;
+      currentShimmer = params.shimmerAmount;
+      currentTone = params.shimmerTone;
+      currentInterval = params.shimmerInterval;
+      
+      if (!isOffline) {
+        if (irDebounceTimer) clearTimeout(irDebounceTimer);
+        irDebounceTimer = setTimeout(() => {
+          try {
+            convolver.buffer = createShimmerImpulse(ctx, currentDecay, currentShimmer, currentTone, currentInterval);
+          } catch (e) {}
+        }, 120);
+      }
     }
   }
 
   function dispose() {
+    if (irDebounceTimer) clearTimeout(irDebounceTimer);
     try { wowOsc.stop(); wowOsc.disconnect(); } catch (e) {}
     try { flutterOsc.stop(); flutterOsc.disconnect(); } catch (e) {}
-    try { modSrcA.stop(); modSrcA.disconnect(); } catch (e) {}
-    try { modSrcB.stop(); modSrcB.disconnect(); } catch (e) {}
     try { inputNode.disconnect(); } catch (e) {}
     try { outputNode.disconnect(); } catch (e) {}
+    try { convolver.disconnect(); } catch (e) {}
   }
 
   return {
@@ -3365,18 +3314,40 @@ function createCinematicFXChain(ctx, isOffline = false, initialParams = {}) {
   };
 }
 
+// Audio data validation: guards against NaN, Infinity, or digital silence
+function isAudioBufferValid(channels) {
+  if (!channels || !channels.length || !channels[0] || !channels[0].length) return false;
+  let hasAudible = false;
+  for (let c = 0; c < channels.length; c++) {
+    const ch = channels[c];
+    const len = ch.length;
+    const step = Math.max(1, Math.floor(len / 40000));
+    for (let i = 0; i < len; i += step) {
+      const v = ch[i];
+      if (isNaN(v) || !isFinite(v)) return false;
+      if (Math.abs(v) > 1e-4) hasAudible = true;
+    }
+  }
+  return hasAudible;
+}
+
 async function bakeCinematicFX(channels, sr, params) {
-  const numChannels = channels.length;
-  const numSamples = channels[0].length;
+  if (!channels || !channels.length || !channels[0] || !channels[0].length) {
+    return channels;
+  }
+  const fallback = channels.map(ch => ch.slice());
 
   if (!params.masterEnabled || (!params.shimmerEnabled && !params.tapeEnabled)) {
-    return channels.map(ch => ch.slice());
+    return fallback;
   }
 
   try {
+    const numChannels = channels.length;
+    const numSamples = channels[0].length;
+
     let tailSec = 0;
     if (params.shimmerEnabled && params.reverbMix > 0.05) {
-      tailSec = Math.min(5.0, Math.max(1.0, params.reverbDecay * 0.35));
+      tailSec = Math.min(5.0, Math.max(1.0, (params.reverbDecay || 6) * 0.35));
     }
     const tailSamples = Math.floor(sr * tailSec);
     const totalSamples = numSamples + tailSamples;
@@ -3384,13 +3355,13 @@ async function bakeCinematicFX(channels, sr, params) {
     const OfflineAudioCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     if (!OfflineAudioCtxClass) {
       console.warn('OfflineAudioContext not available');
-      return channels.map(ch => ch.slice());
+      return fallback;
     }
     const offlineCtx = new OfflineAudioCtxClass(2, totalSamples, sr);
 
     const inBuf = offlineCtx.createBuffer(Math.max(1, numChannels), numSamples, sr);
     for (let c = 0; c < numChannels; c++) {
-      inBuf.copyToChannel(channels[c], c);
+      inBuf.getChannelData(c).set(channels[c]);
     }
 
     const src = offlineCtx.createBufferSource();
@@ -3403,13 +3374,36 @@ async function bakeCinematicFX(channels, sr, params) {
     src.start(0);
     const rendered = await offlineCtx.startRendering();
 
-    return [
-      rendered.getChannelData(0).slice(),
-      rendered.getChannelData(1).slice()
-    ];
+    const raw0 = rendered.getChannelData(0);
+    const raw1 = rendered.getChannelData(1);
+
+    // Validate rendered output against NaN, Infinity, or silence
+    const ch0 = new Float32Array(raw0.length);
+    const ch1 = new Float32Array(raw1.length);
+    let hasNonZero = false;
+    let hasNaN = false;
+
+    for (let i = 0; i < raw0.length; i++) {
+      const v0 = raw0[i];
+      const v1 = raw1[i];
+      if (!isFinite(v0) || !isFinite(v1) || isNaN(v0) || isNaN(v1)) {
+        hasNaN = true;
+        break;
+      }
+      ch0[i] = Math.max(-1, Math.min(1, v0));
+      ch1[i] = Math.max(-1, Math.min(1, v1));
+      if (Math.abs(v0) > 1e-4 || Math.abs(v1) > 1e-4) hasNonZero = true;
+    }
+
+    if (hasNaN || !hasNonZero) {
+      console.warn('bakeCinematicFX rendered invalid or silent buffer; keeping original stretched audio');
+      return fallback;
+    }
+
+    return [ch0, ch1];
   } catch (err) {
     console.warn('bakeCinematicFX error, using original buffer:', err);
-    return channels.map(ch => ch.slice());
+    return fallback;
   }
 }
 
@@ -3435,14 +3429,22 @@ if (bakeFxBtn) {
     try {
       initAudioContext();
       const baked = await bakeCinematicFX(stretchedChannels, stretchedSampleRate, getCinematicFXParams());
-      stretchedChannels = baked;
-      drawWaveform(outputCanvas, outCtx, stretchedChannels[0], '#ec4899');
-      renderOutputRuler();
-      if (fxBakeStatus) {
-        fxBakeStatus.textContent = '✓ Baked into Soundscape!';
-        setTimeout(() => { if (fxBakeStatus) fxBakeStatus.textContent = ''; }, 3500);
+      if (isAudioBufferValid(baked)) {
+        stretchedChannels = baked;
+        drawWaveform(outputCanvas, outCtx, stretchedChannels[0], '#ec4899');
+        renderOutputRuler();
+        if (fxBakeStatus) {
+          fxBakeStatus.textContent = '✓ Baked into Soundscape!';
+          setTimeout(() => { if (fxBakeStatus) fxBakeStatus.textContent = ''; }, 3500);
+        }
+        statusDisplay.textContent = 'Rendered (+ FX Baked)';
+      } else {
+        if (fxBakeStatus) {
+          fxBakeStatus.textContent = 'Bake skipped (pure soundscape kept)';
+          setTimeout(() => { if (fxBakeStatus) fxBakeStatus.textContent = ''; }, 3500);
+        }
+        statusDisplay.textContent = originalStatus;
       }
-      statusDisplay.textContent = 'Rendered (+ FX Baked)';
     } catch (err) {
       console.error('Failed to bake FX:', err);
       if (fxBakeStatus) fxBakeStatus.textContent = 'Bake failed';
@@ -3455,22 +3457,38 @@ if (bakeFxBtn) {
 
 async function finishRender(outChannels, sr) {
   if (arpEnabledInput.checked) outChannels = applyArpeggiator(outChannels, sr);
+  
+  // Guard: Clone pristine stretched channels before any potential FX baking
+  const pristineChannels = outChannels.map(ch => ch.slice());
+
+  let fxApplied = false;
   if (autoBakeFxOnRender && autoBakeFxOnRender.checked && isCinematicFXEnabled()) {
     progressWrap.classList.add('active');
     progressFill.style.width = '92%';
     progressLabel.textContent = 'Baking Cinematic FX (Shimmer & Tape)...';
     try {
-      outChannels = await bakeCinematicFX(outChannels, sr, getCinematicFXParams());
+      const baked = await bakeCinematicFX(outChannels, sr, getCinematicFXParams());
+      if (isAudioBufferValid(baked)) {
+        outChannels = baked;
+        fxApplied = true;
+      } else {
+        console.warn('Baked buffer invalid; preserving pure stretched soundscape');
+        outChannels = pristineChannels;
+      }
     } catch (err) {
-      console.warn('Auto-bake FX error:', err);
+      console.warn('Auto-bake FX error, preserving pure stretched soundscape:', err);
+      outChannels = pristineChannels;
     }
   }
+
   stretchedChannels = outChannels;
   stretchedSampleRate = sr;
   drawWaveform(outputCanvas, outCtx, stretchedChannels[0], '#ec4899');
   renderOutputRuler();
   progressWrap.classList.remove('active');
-  statusDisplay.textContent = arpEnabledInput.checked ? 'Rendered (arpeggiated)' : (autoBakeFxOnRender && autoBakeFxOnRender.checked && isCinematicFXEnabled() ? 'Rendered (+ FX)' : 'Rendered');
+  statusDisplay.textContent = arpEnabledInput.checked 
+    ? 'Rendered (arpeggiated)' 
+    : (fxApplied ? 'Rendered (+ FX)' : 'Rendered');
   processBtn.disabled = false; freezeBtn.disabled = false; playBtn.disabled = false; downloadBtn.disabled = false; previewBtn.disabled = false;
   updateBakeFxBtnState();
 }
@@ -3481,7 +3499,7 @@ async function finishRender(outChannels, sr) {
 function buildStretchedBuffer() {
   const len = stretchedChannels[0].length;
   const buf = audioCtx.createBuffer(stretchedChannels.length, len, stretchedSampleRate);
-  for (let c = 0; c < stretchedChannels.length; c++) buf.copyToChannel(stretchedChannels[c], c);
+  for (let c = 0; c < stretchedChannels.length; c++) buf.getChannelData(c).set(stretchedChannels[c]);
   return buf;
 }
 function updateLiveFilters() {
@@ -3578,7 +3596,8 @@ function encodeWAV(channels, sampleRate) {
   let offset = 44;
   for (let i = 0; i < numSamples; i++) {
     for (let c = 0; c < numChannels; c++) {
-      let s = Math.max(-1, Math.min(1, channels[c][i]));
+      const val = channels[c][i];
+      let s = isFinite(val) ? Math.max(-1, Math.min(1, val)) : 0;
       s = s < 0 ? s * 0x8000 : s * 0x7FFF;
       view.setInt16(offset, s, true); offset += 2;
     }
